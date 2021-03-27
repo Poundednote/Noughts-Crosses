@@ -1,6 +1,10 @@
 from copy import deepcopy
 import numpy as np  # use numpy arays much easier to find diagonal objects
+from itertools import groupby
+import pprint
+import time
 
+start_time = time.time()
 start = np.array([[None for row in range(3)] for column in range(3)]) # 2d 3x3 array populated with none values
 
 
@@ -18,15 +22,19 @@ class Board:
         parent = None
         self.turn = turn
         self.children = np.array([]) # later populated by the generate children function
-        
+
+        # create alternate staes of board list. used later when checking for win states and score heuristic
+        self.alt_states = []
+        self.alt_states.append(self.state.transpose())
+        self.alt_states.append(self.diagonal())
+        self.alt_states.append(np.fliplr(self.state).diagonal())
+        self.alt_states.append(np.flipud(self.state).diagonal())
+        self.alt_states.append(np.flipud.fliplr(self.state).daigonal())
 
 
     def generate_children(self):
         # recursively generates children 
-
-        ''' function subject to change not too sure wether to generate the entire game upon start up and then use specifc values for performance reasons
-            generating every time opponent moves could be long however cba implementing it '''
-
+        # lazy loads children so function later can call it to a given depth
         for row in range(3): 
             for i in range(3):
                 child_board = deepcopy(self.state)  # copys list instead of just referencing it because python sucks dick
@@ -42,29 +50,16 @@ class Board:
                 child.generate_children()
 
     def is_win(self):
-        # find row of 3 inside the board state used to stop reccursive generation of children
-        # so that impposible board states aren't created
+        ''' find row of 3 inside the board state used to stop reccursive generation of children
+         so that impposible board states aren't created '''
         for row in self.state:
             if all(x == row[0] for x in row) and row[0] is not None:
                 return True
             
-        for column in self.state.transpose():
-            if all(x == column[0] for x in column) and column[0] is not None:
+        for states in self.alt_states:
+            if all(x == state[0] for x in state) and state[0] is not None:
                 return True
-        
-        if all(x == self.state.diagonal()[0] for x in self.state.diagonal()) and self.state.diagonal()[0] is not None: # diagonal
-            return True
-
-        elif all(x == np.fliplr(self.state).diagonal()[0] for x in np.fliplr(self.state).diagonal()) and np.fliplr(self.state).diagonal()[0] is not None:  # flip list horizontally
-            return True
-
-        elif all(x == np.fliplr(self.state).diagonal()[0] for x in np.flipud(self.state).diagonal()) and np.flipud(self.state).diagonal()[0] is not None:  # flip vertically
-            return True
-        
-        elif all(x == np.flipud(np.fliplr(self.state)).diagonal()[0] for x in np.flipud(np.fliplr(self.state).diagonal())) and np.flipud(np.fliplr(self.state)).diagonal()[0] is not None:  # flip horizontally and vertically
-            return True
-
-        else: 
+        else:
             return False
 
     def change_turn(self, turn):
@@ -75,16 +70,23 @@ class Board:
             turn == 'O'
             return turn
 
-
-board = Board(start, 0, 'O')
-
-tree = {}
-def populate_tree(item, n):
-    tree[item] = []
+    def evaluate_board(self): 
+        # This function is probably really inefficient plans to replace this with some type of numpy alternative
+        score = float('-inf')
+        for row in self.state:
+            grouped_row = [(k, sum(1 for i in g)) for k,g in groupby(row)]
+            for item in grouped_row:
+                if item[0] == 'X':
+                    score += item[1]
+        return score 
+            
+# reccursive function to populate a dictionary with board objects as keys and vlaues are dictionarys of other board items
+def populate_tree(item, depth, tree):
+    tree[item] = {}
     for i in item.generate_children():
-        if n > 0:
-            tree[item].append(i.state)
-            populate_tree(i, n-1)
+        if depth > 0:
+            tree[item][i] = {}
+            populate_tree(i, depth-1, tree[item])  # calls the fuction again but uses the parent as the root tree
     return tree
-populate_tree(board, 1)
-print(tree)
+
+
